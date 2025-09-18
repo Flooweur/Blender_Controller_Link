@@ -12,22 +12,23 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import bpy
-from . import main
+from . import recording
+from . import nodegroups
 from . import ui
 
 classes = (
-    main.CL_OT_LiveControllerInputs,
-    main.CL_OT_RecordControllerInputs,
-    main.CL_OT_CreateNodegroup,
-    ui.CL_PT_Main,
+    recording.CLE_OT_LiveControllerInputs,
+    recording.CLE_OT_RecordControllerInputs,
+    nodegroups.CLE_OT_CreateNodegroup,
+    ui.CLE_PT_Main,
 )
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    bpy.types.Scene.cl_record_modal_running = bpy.props.BoolProperty(default=False)
-    bpy.types.Scene.cl_live_modal_running = bpy.props.BoolProperty(default=False)
+    bpy.types.Scene.cle_record_modal_running = bpy.props.BoolProperty(default=False)
+    bpy.types.Scene.cle_live_modal_running = bpy.props.BoolProperty(default=False)
 
 def unregister():
     for cls in reversed(classes):

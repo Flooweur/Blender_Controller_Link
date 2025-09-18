@@ -2,11 +2,11 @@ schema_version = "1.0.0"
 
 # Example of manifest file for a Blender extension
 # Change the values according to your extension
-id = "controller_link"
+id = "controller_link_extended"
 version = "1.0.0"
-name = "Controller Link"
-tagline = "Use a gamepad as input"
-maintainer = "Arthur Blaquart (@globglob)"
+name = "Controller Link Extended"
+tagline = "Use a gamepad as input, with advanced configuration"
+maintainer = "Sami Carret (@Flooweur)"
 # Supported types: "add-on", "theme"
 type = "add-on"
 
