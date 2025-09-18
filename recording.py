@@ -7,6 +7,7 @@ import bpy
 import logging
 from typing import Optional
 from .controller import SDL2Controller, create_reader, get_reader
+from .camera_controller import update_camera_from_controller
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -92,6 +93,9 @@ class CLE_OT_LiveControllerInputs(bpy.types.Operator):
                         if success:
                             # Trigger driver updates
                             reader.location = reader.location
+                            
+                            # Update camera controller if enabled
+                            update_camera_from_controller(context.scene)
                         else:
                             logger.warning("Failed to poll controller inputs")
                 else:
@@ -154,9 +158,10 @@ class CLE_OT_LiveControllerInputs(bpy.types.Operator):
                 self.report({'ERROR'}, f"Controller initialization failed: {e}")
                 return {'CANCELLED'}
 
-            # Set up timer and modal
+            # Set up timer and modal with configurable rate
             wm = context.window_manager
-            self._timer = wm.event_timer_add(time_step=1/60, window=context.window)
+            record_rate = getattr(context.scene, 'cle_record_rate', 60)
+            self._timer = wm.event_timer_add(time_step=1/record_rate, window=context.window)
             wm.modal_handler_add(self)
 
             # Set flag
@@ -258,6 +263,9 @@ class CLE_OT_RecordControllerInputs(bpy.types.Operator):
                         if success:
                             # Trigger driver updates
                             reader.location = reader.location
+                            
+                            # Update camera controller if enabled
+                            update_camera_from_controller(context.scene)
                         else:
                             logger.warning("Failed to poll controller inputs during recording")
                 else:
@@ -329,9 +337,10 @@ class CLE_OT_RecordControllerInputs(bpy.types.Operator):
             except Exception as e:
                 logger.warning(f"Failed to add keyframe handler: {e}")
 
-            # Set up timer and modal
+            # Set up timer and modal with configurable rate
             wm = context.window_manager
-            self._timer = wm.event_timer_add(time_step=1/60, window=context.window)
+            record_rate = getattr(context.scene, 'cle_record_rate', 60)
+            self._timer = wm.event_timer_add(time_step=1/record_rate, window=context.window)
             wm.modal_handler_add(self)
 
             # Start timeline playback
