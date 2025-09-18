@@ -8,12 +8,14 @@ class CLE_PT_Main(bpy.types.Panel):
     
     This panel provides the primary user interface for the addon, displayed
     in the 3D Viewport's sidebar under the "CL Extended" tab. It includes:
-    - Start/stop buttons for live and recording modes
-    - Controller connection status display
-    - Real-time display of all controller inputs (axes and buttons)
+    - Get Controller Inputs button (initial state)
+    - Stop button when controller is connected
+    - Record section with rate controls
+    - Camera Controller section with camera/target selection
+    - Custom Inputs section with + button for adding custom inputs
     
     The panel dynamically updates its content based on the current state:
-    - Shows different buttons when modes are active/inactive
+    - Shows different sections when controller is connected
     - Displays controller information when connected
     - Shows live input values during operation
     """
@@ -37,75 +39,142 @@ class CLE_PT_Main(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
-        # LIVE INPUT BUTTON - Main control for real-time input
-        row = layout.row()
-        row.scale_y = 1.5  # Make button larger for easier clicking
+        # Check if controller is connected
+        controller_connected = scene.cle_live_modal_running or scene.cle_record_modal_running
         
-        # Only show live button when recording isn't active
-        if not scene.cle_record_modal_running:
-            if scene.cle_live_modal_running:
-                # Live mode is active - show stop button
-                row.operator("wm.cle_live_controller_inputs", text="Stop", icon='PAUSE')
-            else:
-                # Live mode is inactive - show start button
-                row.operator("wm.cle_live_controller_inputs", text="Get Controller Inputs", icon='PLAY')
-
-        # Show additional controls only when a mode is active
-        if scene.cle_live_modal_running or scene.cle_record_modal_running:
-
-            # RECORD BUTTON - Available when live mode is running
+        if not controller_connected:
+            # Initial state - only show Get Controller Inputs button
             row = layout.row()
-            row.scale_y = 1.5  # Make button larger for easier clicking
+            row.scale_y = 1.5
+            row.operator("wm.cle_live_controller_inputs", text="Get Controller Inputs", icon='PLAY')
+        else:
+            # Controller is connected - show all sections
+            
+            # STOP BUTTON - At the top
+            row = layout.row()
+            row.scale_y = 1.5
+            if scene.cle_live_modal_running:
+                row.operator("wm.cle_live_controller_inputs", text="Stop", icon='PAUSE')
+            elif scene.cle_record_modal_running:
+                row.operator("wm.cle_record_controller_inputs", text="Stop", icon='PAUSE')
+            
+            layout.separator()
+            
+            # RECORD SECTION
+            box = layout.box()
+            box.label(text="Record", icon='REC')
+            
+            # Record button
+            row = box.row()
+            row.scale_y = 1.2
             if scene.cle_record_modal_running:
-                # Recording is active - show stop recording button
                 row.operator("wm.cle_record_controller_inputs", text="Stop Recording", icon='PAUSE')
             else:
-                # Recording is inactive but live mode is running - show record button
                 row.operator("wm.cle_record_controller_inputs", text="Record", icon='REC')
-
-            layout.separator()  # Visual separator between buttons and info
-
+            
+            # Recording rate input
+            row = box.row()
+            row.prop(scene, "cle_record_rate", text="Rate (Hz)")
+            
+            # Additional recording options
+            row = box.row()
+            row.prop(scene, "cle_record_auto_keyframe", text="Auto Keyframe")
+            
+            layout.separator()
+            
+            # CAMERA CONTROLLER SECTION
+            box = layout.box()
+            
+            # Section header with enable checkbox
+            row = box.row()
+            row.prop(scene, "cle_camera_controller_enabled", text="Camera Controller")
+            
+            # Enable/disable the section based on checkbox
+            if scene.cle_camera_controller_enabled:
+                # Camera selection
+                row = box.row()
+                row.prop(scene, "cle_camera_object", text="Camera")
+                
+                # Target selection
+                row = box.row()
+                row.prop(scene, "cle_target_object", text="Target")
+                
+                # Camera control options
+                row = box.row()
+                row.prop(scene, "cle_camera_sensitivity", text="Sensitivity")
+                
+                row = box.row()
+                row.prop(scene, "cle_camera_smoothing", text="Smoothing")
+                
+                # Camera mode info
+                if scene.cle_target_object:
+                    box.label(text="Mode: Look At Target", icon='VIEW_CAMERA')
+                else:
+                    box.label(text="Mode: Free Camera", icon='CAMERA_DATA')
+            else:
+                # Greyed out state
+                box.enabled = False
+                box.label(text="Camera Controller Disabled")
+            
+            layout.separator()
+            
+            # CUSTOM INPUTS SECTION
+            box = layout.box()
+            box.label(text="Custom Inputs", icon='SETTINGS')
+            
+            # Show existing custom inputs
+            custom_inputs = getattr(scene, 'cle_custom_inputs', [])
+            if custom_inputs:
+                for i, custom_input in enumerate(custom_inputs):
+                    row = box.row()
+                    row.label(text=custom_input.name)
+                    op = row.operator("wm.cle_edit_custom_input", text="", icon='EDIT')
+                    op.index = i
+                    op = row.operator("wm.cle_remove_custom_input", text="", icon='X')
+                    op.index = i
+            else:
+                box.label(text="No custom inputs")
+            
+            # Add new custom input button
+            row = box.row()
+            row.scale_y = 1.2
+            row.operator("wm.cle_add_custom_input", text="+ Add Custom Input", icon='ADD')
+            
+            layout.separator()
+            
+            # CONTROLLER STATUS
+            box = layout.box()
+            box.label(text="Controller Status", icon='INFO')
+            
             # Get the active controller handler for status display
             handler = None
             if scene.cle_live_modal_running:
-                # Get controller from live mode operator
                 handler = getattr(recording.CLE_OT_LiveControllerInputs, "_controller", None)
             elif scene.cle_record_modal_running:
-                # Get controller from recording mode operator
                 handler = getattr(recording.CLE_OT_RecordControllerInputs, "_controller", None)
 
-            # Display controller connection status
             if handler and handler.is_connected():
-                # Show connected controller name
-                layout.label(text=f"Controller: {handler.controller_name}")
+                box.label(text=f"Connected: {handler.controller_name}")
             else:
-                # Show disconnected state
-                layout.label(text="No controller detected.")
+                box.label(text="No controller detected.")
 
-            # Get the object that stores controller data
+            # Show live input values if available
             cle_reader = controller.get_reader()
-            if not cle_reader:
-                layout.label(text="No reader object found.")
-                return  # Can't show input values without reader object
+            if cle_reader:
+                # AXES SECTION - Display all analog stick and trigger values
+                box = layout.box()
+                box.label(text="Axes", icon='IPO_EASE_IN_OUT')
+                axis_keys = sorted(k for k in cle_reader.keys() if k.startswith("controller_axis_"))
+                for prop_name in axis_keys:
+                    row = box.row()
+                    display_name = prop_name.replace("controller_axis_", "").capitalize()
+                    row.prop(cle_reader, f'["{prop_name}"]', text=display_name)
 
-            # AXES SECTION - Display all analog stick and trigger values
-            layout.label(text="Axes:")  # Section header
-            # Get all axis properties and sort them for consistent display
-            axis_keys = sorted(k for k in cle_reader.keys() if k.startswith("controller_axis_"))
-            for prop_name in axis_keys:
-                row = layout.row()
-                # Display axis with cleaned-up name (remove "controller_axis_" prefix)
-                display_name = prop_name.replace("controller_axis_", "").capitalize()
-                row.prop(cle_reader, f'["{prop_name}"]', text=display_name)
-
-            layout.separator()  # Visual separator between sections
-
-            # BUTTONS SECTION - Display all button states
-            layout.label(text="Buttons:")  # Section header
-            # Get all button properties and sort them for consistent display
-            button_keys = sorted(k for k in cle_reader.keys() if k.startswith("controller_button_"))
-            for prop_name in button_keys:
-                row = layout.row()
-                # Display button with cleaned-up name (remove "controller_button_" prefix)
-                display_name = prop_name.replace("controller_button_", "").capitalize()
-                row.prop(cle_reader, f'["{prop_name}"]', text=display_name)
+                # BUTTONS SECTION - Display all button states
+                box = layout.box()
+                box.label(text="Buttons", icon='RADIOBUT_ON')
+                button_keys = sorted(k for k in cle_reader.keys() if k.startswith("controller_button_"))
+                for prop_name in button_keys:
+                    row = box.row()
+                    display_name = prop_name.replace("controller_button_", "").capitalize()
+                    row.prop(cle_reader, f'["{prop_name}"]', text=display_name)
